@@ -24,11 +24,31 @@ app.get('/api/hello', function(req, res) {
 
 app.post('/api/shorturl', function(req, res) {
   const regex = /^(https?:\/\/)?(www\.)?([A-Za-z0-9-]{1,63})(\.[A-Za-z0-9-]{1,63})*(\.[A-Za-z]{2,})(\/.*)?$/i;
-  const host_name = req.body.url.match(regex).slice(3,).join("")
-  
- 
-  console.log("host_name: " + host_name);
+  const url_valid = req.body.url.match(regex)
+  if (!url_valid){
+    return res.json({
+      error: "Invalid URL"
+    })  
+  } 
+  // const hostName = url_valid.slice(3,).join("")
+  // console.log("host_name: " + hostName);
+  // dns.lookup('forum.freecodecamp.org/',(err, address, family) => {
+  //   // if (err) return console.log(err);
+  //   console.log('address: %j family: IPv%s', address, family)
+  //   })
+  // res.json({
+  //   "url":hostName
+  // })
+  const options = {
+    family: 4,
+    hints: dns.ADDRCONFIG | dns.V4MAPPED,
+  };
 
+  dns.lookup('forum.freecodecamp.org', options, (err, addresses) => {
+    console.log('addresses: %j', addresses);
+    res.json({   "url": addresses  })
+  }
+  )
 });
 
 app.listen(port, function() {
