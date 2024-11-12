@@ -3,6 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const dns = require('dns')
+const url = require('url')
+
+//MongoDB
+const mongoose = require('mongoose')
+const Schema = mongoose.Schema
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+
+const shortURLSchema = new Schema({
+  originalURL: { type: String, required: true },
+  short: Number,
+})
+const shortURL = mongoose.model('shortURL', shortURLSchema)
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -13,44 +25,94 @@ app.use(bodyParser.urlencoded({ extended: false })).use(bodyParser.json());
 
 app.use('/public', express.static(`${process.cwd()}/public`));
 
-app.get('/', function(req, res) {
+app.get('/', function (req, res) {
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
 // Your first API endpoint
-app.get('/api/hello', function(req, res) {
+app.get('/api/hello', function (req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-app.post('/api/shorturl', function(req, res) {
-  const regex = /^(https?:\/\/)?(www\.)?([A-Za-z0-9-]{1,63})(\.[A-Za-z0-9-]{1,63})*(\.[A-Za-z]{2,})(\/.*)?$/i;
-  const url_valid = req.body.url.match(regex)
-  if (!url_valid){
-    return res.json({
-      error: "Invalid URL"
-    })  
-  } 
-  // const hostName = url_valid.slice(3,).join("")
-  // console.log("host_name: " + hostName);
-  // dns.lookup('forum.freecodecamp.org/',(err, address, family) => {
-  //   // if (err) return console.log(err);
-  //   console.log('address: %j family: IPv%s', address, family)
-  //   })
-  // res.json({
-  //   "url":hostName
-  // })
-  const options = {
-    family: 4,
-    hints: dns.ADDRCONFIG | dns.V4MAPPED,
-  };
+app.post('/api/shorturl',
+  function (req, res, next) {
+    const targetHost = url.parse(req.body.url).host
+    // fetch URL
+    const options = {
+      family: 4,
+      hints: dns.ADDRCONFIG | dns.V4MAPPED,
+    };
+    dns.lookup(targetHost, options, (err, data) => {
+      if (err) {
+        console.log(err)
+        return res.json({ error: "Invalid URL" });
+      }
+    })
+    next()
+  },
+  function (req, res, next) {
+    let inputShort = 1;
+    shortURL.findOne({})
+      .sort({ short: -1 }).then(
+        //check if there is any record
+        data => {
+          console.log(data)
+          console.log("current short no. :", data.short)
+          if (data) {
+            inputShort = data.short + 1
+            console.log("update short:", inputShort)
+          } 
+        }
+      ).then(
+        shortURL.findOne({ originalURL: req.body.url, })
+          .then(data => {
+            if (data != null) {
+              return res.json(
+                {
+                  "originalURL": req.body.url,
+                  "short": data.short
+                }
+              )
+            } else {
+              shortURL.create({
+                originalURL: req.body.url,
+                short:inputShort
+              }).then(
+                data =>{
+                  return res.json(
+                    {
+                      "originalURL": data.originalURL,
+                      "short": data.short
+                    }
+                  )
+                }
+              )
+            }
+          })
+      )
+      .catch(err => {
+        console.error(err)
+      })
 
-  dns.lookup('forum.freecodecamp.org', options, (err, addresses) => {
-    console.log('addresses: %j', addresses);
-    res.json({   "url": addresses  })
+    // return res.json(
+    //   {
+    //     "originalURL": req.body.url
+    //   }
+    // )
   }
-  )
-});
+);
 
-app.listen(port, function() {
+app.get('/api/shorturl/:shortid',
+  function(req,res,next){
+    shortURL.findOne({short:req.params.shortid}).then(data=>{
+      if(data!=null){
+        res.redirect(data.originalURL)
+    }
+    }
+    )
+  }
+)
+
+app.listen(port, function () {
   console.log(`Listening on port ${port}`);
-});
+})
