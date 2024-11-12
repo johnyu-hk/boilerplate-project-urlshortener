@@ -11,7 +11,7 @@ const Schema = mongoose.Schema
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
 
 const shortURLSchema = new Schema({
-  originalURL: { type: String, required: true },
+  original_url: { type: String, required: true },
   short: Number,
 })
 const shortURL = mongoose.model('shortURL', shortURLSchema)
@@ -42,10 +42,18 @@ app.post('/api/shorturl',
       family: 4,
       hints: dns.ADDRCONFIG | dns.V4MAPPED,
     };
+    const expression = /(?:http:\/\/.)?(?:www\.)?[-a-zA-Z0-9@%._\+~#=]{2,256}\.[a-z]{2,6}\b(?:[-a-zA-Z0-9@:%_\+.~#?&\/\/=]*)/gm
+    const urlRegex = new RegExp(expression)
+
+    if (!req.body.url.match(urlRegex)){
+      return res.json(
+        { error: 'invalid url' }
+      )
+    }
+
     dns.lookup(targetHost, options, (err, data) => {
       if (err) {
         console.log(err)
-        return res.json({ error: "Invalid URL" });
       }
     })
     next()
@@ -64,25 +72,25 @@ app.post('/api/shorturl',
           } 
         }
       ).then(
-        shortURL.findOne({ originalURL: req.body.url, })
+        shortURL.findOne({ original_url: req.body.url, })
           .then(data => {
             if (data != null) {
               return res.json(
                 {
-                  "originalURL": req.body.url,
-                  "short": data.short
+                  "original_url": req.body.url,
+                  "short_url": data.short
                 }
               )
             } else {
               shortURL.create({
-                originalURL: req.body.url,
+                original_url: req.body.url,
                 short:inputShort
               }).then(
                 data =>{
                   return res.json(
                     {
-                      "originalURL": data.originalURL,
-                      "short": data.short
+                      "original_url": data.original_url,
+                      "short_url": data.short
                     }
                   )
                 }
@@ -94,11 +102,7 @@ app.post('/api/shorturl',
         console.error(err)
       })
 
-    // return res.json(
-    //   {
-    //     "originalURL": req.body.url
-    //   }
-    // )
+  
   }
 );
 
@@ -106,7 +110,7 @@ app.get('/api/shorturl/:shortid',
   function(req,res,next){
     shortURL.findOne({short:req.params.shortid}).then(data=>{
       if(data!=null){
-        res.redirect(data.originalURL)
+        res.redirect(data.original_url)
     }
     }
     )
